@@ -296,6 +296,31 @@
       document.body.classList.toggle('dark');
     }
 
+    // เพิ่มสูตรโกง nimda
+    let cheatBuffer = '';
+    const cheatCode = 'nimda';
+
+    document.addEventListener('keydown', (e) => {
+      cheatBuffer += e.key.toLowerCase();
+      if (cheatBuffer.length > cheatCode.length) cheatBuffer = cheatBuffer.slice(-cheatCode.length);
+
+      if (cheatBuffer === cheatCode) {
+        revealMines();
+        alert('Cheat activated: All mines revealed!');
+      }
+    });
+
+    function revealMines() {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = grid[r][c];
+          if (cell.mine && !cell.revealed) {
+            cell.element.style.border = '2px dashed red';
+          }
+        }
+      }
+    }
+
     game.addEventListener('click', e => {
       if (!e.target.classList.contains('cell')) return;
       const r = parseInt(e.target.dataset.row);
