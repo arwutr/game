@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>หมากขุมไทย By ARM</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f4eadc;
+      text-align: center;
+    }
+    h1 { color: #5d3a00; }
+    #board-wrapper {
+      display: grid;
+      grid-template-rows: auto auto auto;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(7, 90px);
+      grid-template-rows: 90px 90px 90px;
+      gap: 8px;
+      background: #deb887;
+      padding: 20px;
+      border-radius: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    .hole, .store {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: radial-gradient(#e0c199, #b1763b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: #fff;
+      cursor: pointer;
+      position: relative;
+      box-shadow: inset 2px 2px 6px #8b5e3c;
+    }
+    .store {
+      background: radial-gradient(#b97a57, #6a412a);
+    }
+    .hole.active {
+      box-shadow: 0 0 12px 4px #fff176, inset 2px 2px 6px #8b5e3c;
+    }
+    .seeds {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    .seed {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      position: absolute;
+      background: radial-gradient(circle at 30% 30%, #ffcc80, #ff6f00, #e65100);
+      box-shadow: 0 0 4px rgba(255, 140, 0, 0.8);
+    }
+    .seed.new {
+      animation: drop 0.3s ease-in-out, bounce 0.4s ease-in-out;
+    }
+    @keyframes drop {
+      from { transform: scale(0.2); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+    @keyframes bounce {
+      0%   { transform: scale(1) translateY(0); }
+      30%  { transform: scale(1.1) translateY(-6px); }
+      60%  { transform: scale(0.95) translateY(2px); }
+      100% { transform: scale(1) translateY(0); }
+    }
+  </style>
+  <script>
+    let gameState = Array(12).fill(5);
+    gameState[5] = 0;
+    gameState[11] = 0;
+    let currentPlayer = 0;
+    let vsAI = false;
+    let players = ["ผู้เล่น 1", "ผู้เล่น 2"];
+
+    function render() {
+      document.getElementById("turnDisplay").innerText = `ถึงตาของ: ${players[currentPlayer]}`;
+      document.getElementById("scoreDisplay").innerText = `คะแนน: ${players[0]} = ${gameState[5]} | ${players[1]} = ${gameState[11]}`;
+      for (let i = 0; i < 12; i++) {
+        const id = i === 5 ? "store0" : i === 11 ? "store1" : `hole${i}`;
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.remove("active");
+          const seedsContainer = el.querySelector(".seeds") || el;
+          seedsContainer.innerHTML = "";
+          for (let j = 0; j < gameState[i]; j++) {
+            const seed = document.createElement("div");
+            seed.className = "seed";
+            seed.style.left = `${Math.random() * 60 + 10}px`;
+            seed.style.top = `${Math.random() * 60 + 10}px`;
+            seedsContainer.appendChild(seed);
+          }
+        }
+      }
+    }
+
+    async function makeMove(index) {
+      if ((currentPlayer === 0 && index > 4) || (currentPlayer === 1 && index < 6)) return;
+      let count = gameState[index];
+      if (count === 0) return;
+      gameState[index] = 0;
+      render();
+      let pos = index;
+      while (true) {
+        while (count > 0) {
+          pos = (pos + 1) % 12;
+          if ((currentPlayer === 0 && pos === 11) || (currentPlayer === 1 && pos === 5)) continue;
+          gameState[pos]++;
+          const highlightId = pos === 5 ? 'store0' : pos === 11 ? 'store1' : `hole${pos}`;
+          document.getElementById(highlightId).classList.add("active");
+          await new Promise(r => setTimeout(r, 100));
+          render();
+          await new Promise(r => setTimeout(r, 400));
+          document.getElementById(highlightId).classList.remove("active");
+          count--;
+        }
+        const isOwnSide = (currentPlayer === 0 && pos >= 0 && pos <= 4) || (currentPlayer === 1 && pos >= 6 && pos <= 10);
+        const opposite = 10 - pos;
+        if (gameState[pos] === 1 && isOwnSide && gameState[opposite] > 0) {
+          const captured = gameState[opposite] + 1;
+          gameState[opposite] = 0;
+          gameState[pos] = 0;
+          const storeIndex = currentPlayer === 0 ? 5 : 11;
+          gameState[storeIndex] += captured;
+          break;
+        } else if (gameState[pos] > 1 && pos !== 5 && pos !== 11) {
+          count = gameState[pos];
+          gameState[pos] = 0;
+          await new Promise(r => setTimeout(r, 300));
+        } else {
+          break;
+        }
+      }
+      if ((currentPlayer === 0 && pos === 5) || (currentPlayer === 1 && pos === 11)) {
+        render();
+        return;
+      }
+      currentPlayer = 1 - currentPlayer;
+      render();
+      await new Promise(r => setTimeout(r, 400));
+      checkEndGame();
+      if (vsAI && currentPlayer === 1) setTimeout(() => makeMove(aiChooseMove()), 800);
+    }
+
+    function startGame(isAI) {
+      vsAI = isAI;
+      players[0] = document.getElementById("player1Name").value || "ผู้เล่น 1";
+      players[1] = document.getElementById("player2Name").value || (isAI ? "AI" : "ผู้เล่น 2");
+      gameState = Array(12).fill(5);
+      gameState[5] = 0;
+      gameState[11] = 0;
+      currentPlayer = 0;
+      render();
+      if (vsAI && currentPlayer === 1) setTimeout(() => makeMove(aiChooseMove()), 800);
+    }
+
+    function aiChooseMove() {
+      for (let i = 6; i <= 10; i++) {
+        if (gameState[i] > 0) return i;
+      }
+      return 6;
+    }
+
+    function checkEndGame() {
+      if (gameState[5] > 25 || gameState[11] > 25) {
+        const winner = gameState[5] > gameState[11] ? players[0] : players[1];
+        const result = `${winner} ชนะ! (${new Date().toLocaleTimeString()})`;
+        let stats = [];
+        try {
+          const raw = localStorage.getItem("markkumStats");
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            stats = parsed;
+          }
+        } catch (e) {}
+        stats.push(result);
+        localStorage.setItem("markkumStats", JSON.stringify(stats));
+        const fullLog = document.getElementById("fullHistoryLog");
+        fullLog.innerHTML += `<div>${result}</div>`;
+        alert(result);
+        return;
+      }
+
+      if (p1Empty || p2Empty) {
+        const p1Remaining = gameState.slice(0, 5).reduce((a, b) => a + b, 0);
+        const p2Remaining = gameState.slice(6, 11).reduce((a, b) => a + b, 0);
+        for (let i = 0; i < 5; i++) gameState[i] = 0;
+        for (let i = 6; i < 11; i++) gameState[i] = 0;
+        gameState[5] += p1Remaining;
+        gameState[11] += p2Remaining;
+        render();
+        setTimeout(() => {
+          const winner = gameState[5] > gameState[11] ? players[0] : gameState[11] > gameState[5] ? players[1] : "เสมอกัน";
+          const result = `${winner} ชนะ! (${new Date().toLocaleTimeString()})`;
+          let stats = [];
+          try {
+            const raw = localStorage.getItem("markkumStats");
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              stats = parsed;
+            }
+          } catch (e) {}
+          stats.push(result);
+          localStorage.setItem("markkumStats", JSON.stringify(stats));
+          const fullLog = document.getElementById("fullHistoryLog");
+          fullLog.innerHTML += `<div>${result}</div>`;
+          alert(result);
+        }, 300);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const fullLog = document.getElementById("fullHistoryLog");
+      let fullStats;
+      try {
+        fullStats = JSON.parse(localStorage.getItem("markkumStats") || "[]");
+        if (!Array.isArray(fullStats)) fullStats = [];
+      } catch (e) {
+        fullStats = [];
+      }
+      fullStats.forEach(line => {
+        fullLog.innerHTML += `<div>${line}</div>`;
+      });
+    });
+  </script>
+</head>
+<body>
+  <div style="margin-bottom: 10px;">
+    <label>ชื่อผู้เล่น 1: <input id="player1Name" placeholder="Player 1"></label>
+    <label>ชื่อผู้เล่น 2: <input id="player2Name" placeholder="Player 2 หรือ AI"></label>
+    <button onclick="startGame(false)">เล่นกับเพื่อน</button>
+    <button onclick="startGame(true)">เล่นกับ AI</button>
+  </div>
+  <h1>เกมหมากขุมไทย By ARM</h1>
+  <p id="scoreDisplay" style="font-size: 16px; color: #333;">คะแนน: ผู้เล่น 1 = 0 | ผู้เล่น 2 = 0</p>
+  <div id="historyLog" style="display: none;"></div>
+  <p id="turnDisplay" style="font-size: 18px; color: #5d3a00;">ถึงตาของ: ผู้เล่น 1</p>
+  <div id="board-wrapper">
+    <div id="board">
+      <div class="store" id="store1" style="grid-row: 2; grid-column: 1;"><div class="seeds"></div></div>
+      <div class="hole" id="hole10" onclick="makeMove(10)" style="grid-row: 1; grid-column: 2;"><div class="seeds"></div></div>
+      <div class="hole" id="hole9" onclick="makeMove(9)" style="grid-row: 1; grid-column: 3;"><div class="seeds"></div></div>
+      <div class="hole" id="hole8" onclick="makeMove(8)" style="grid-row: 1; grid-column: 4;"><div class="seeds"></div></div>
+      <div class="hole" id="hole7" onclick="makeMove(7)" style="grid-row: 1; grid-column: 5;"><div class="seeds"></div></div>
+      <div class="hole" id="hole6" onclick="makeMove(6)" style="grid-row: 1; grid-column: 6;"><div class="seeds"></div></div>
+      <div class="hole" id="hole0" onclick="makeMove(0)" style="grid-row: 3; grid-column: 2;"><div class="seeds"></div></div>
+      <div class="hole" id="hole1" onclick="makeMove(1)" style="grid-row: 3; grid-column: 3;"><div class="seeds"></div></div>
+      <div class="hole" id="hole2" onclick="makeMove(2)" style="grid-row: 3; grid-column: 4;"><div class="seeds"></div></div>
+      <div class="hole" id="hole3" onclick="makeMove(3)" style="grid-row: 3; grid-column: 5;"><div class="seeds"></div></div>
+      <div class="hole" id="hole4" onclick="makeMove(4)" style="grid-row: 3; grid-column: 6;"><div class="seeds"></div></div>
+      <div class="store" id="store0" style="grid-row: 2; grid-column: 7;"><div class="seeds"></div></div>
+    </div>
+  </div>
+  <div style="margin-top: 40px; padding: 10px; background: #fffbe6; border-top: 2px solid #ccc;">
+    <h2 style="color: #5d3a00;">สถิติผลการแข่งขันย้อนหลัง</h2>
+    <div id="fullHistoryLog" style="font-size: 14px; color: #333;"></div>
+  </div>
+</body>
+</html>
