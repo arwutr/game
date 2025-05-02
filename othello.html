@@ -206,23 +206,18 @@
 
   <div id="historyDisplay" style="margin-top: 30px;"><h3>ผลการแข่งขันย้อนหลัง</h3><div id="historyContent"></div></div>
 
-  <script>
-    window.addEventListener("load", () => {
-      fetch("othello.csv")
-        .then(response => response.text())
-        .then(text => {
-          const lines = text.trim().split("\n");
-          const history = lines.map(line => {
-            const [date, p1, p2, winner] = line.split(",");
-            return `<div>🕒 ${date} — <strong>${p1}</strong> vs <strong>${p2}</strong> 👉 ผู้ชนะ: <strong>${winner}</strong></div>`;
-          }).reverse().slice(0, 10).join("");
-          document.getElementById("historyContent").innerHTML = history;
-        })
-        .catch(() => {
-          document.getElementById("historyContent").innerText = "ยังไม่มีข้อมูลการแข่งขันย้อนหลังค่ะ";
-        });
-    });
-  </script>
+<script>
+  window.addEventListener("load", () => {
+    fetch("get_stats.php")
+      .then(response => response.text())
+      .then(html => {
+        document.getElementById("historyContent").innerHTML = html;
+      })
+      .catch(() => {
+        document.getElementById("historyContent").innerText = "ยังไม่มีข้อมูลการแข่งขันย้อนหลังค่ะ";
+      });
+  });
+</script>
 
 </body>
 </html>
