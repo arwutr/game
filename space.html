@@ -77,13 +77,18 @@
       if (e.key === "ArrowLeft") playerX -= 10;
       if (e.key === "ArrowRight") playerX += 10;
       if (e.key === " ") {
-        bullets.push({
-          x: playerX + 20,
-          y: canvas.height - 55,
-          radius: 3,
-          speed: 6,
-          active: true
-        });
+    const angleOffsets = [-0.4, -0.2, 0, 0.2, 0.4];
+    angleOffsets.forEach(offset => {
+      bullets.push({
+        x: playerX + 20,
+        y: canvas.height - 55,
+        radius: 3,
+        speed: 6,
+        dx: Math.sin(offset) * 4,
+        dy: -Math.cos(offset) * 6,
+        active: true
+      });
+    });
       }
     });
 
@@ -134,8 +139,23 @@
       }
 
       bullets.forEach((b) => {
-        b.y -= b.speed;
-        ctx.fillStyle = "yellow";
+        b.x += b.dx || 0;
+        b.y += b.dy || -b.speed;
+        let color = "255, 255, 0"; // default yellow
+        if (b.dx < -3) color = "255, 0, 0";       // far left - red
+        else if (b.dx < -1) color = "255, 165, 0"; // left - orange
+        else if (b.dx < 1) color = "255, 255, 0";   // center - yellow
+        else if (b.dx < 3) color = "0, 255, 0";     // right - green
+        else color = "0, 255, 255";                // far right - cyan
+
+        const gradient = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.radius * 2);
+        gradient.addColorStop(0, `rgba(${color}, 1)`);
+        gradient.addColorStop(1, `rgba(${color}, 0)`);
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgb(${color})`;
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
         ctx.fill();
