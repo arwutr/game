@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Othello By ARM</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #f4f4f4; }
+    #board { display: grid; grid-template-columns: repeat(8, 50px); gap: 2px; margin: 20px auto; }
+    .cell { width: 50px; height: 50px; background: green; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+    .black { background: black; border-radius: 50%; width: 40px; height: 40px; }
+    .white { background: white; border-radius: 50%; width: 40px; height: 40px; }
+    .hint { width: 10px; height: 10px; border-radius: 50%; background: yellow; position: absolute; top: 20px; left: 20px; }
+    .controls { margin-top: 20px; }
+    #turnDisplay, #resultDisplay { font-weight: bold; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>เกม Othello</h1>
+
+  <div class="controls">
+    <input type="text" id="player1" placeholder="ชื่อผู้เล่น 1">
+    <input type="text" id="player2" placeholder="ชื่อผู้เล่น 2 หรือ AI">
+    <select id="mode">
+      <option value="pvp">เล่นกับเพื่อน</option>
+      <option value="ai">เล่นกับ AI</option>
+    </select>
+    <button onclick="startGame()">เริ่มเกม</button>
+  </div>
+
+  <div id="turnDisplay"></div>
+  <div id="resultDisplay"></div>
+  <div id="board"></div>
+
+  <script>
+    const boardElem = document.getElementById("board");
+    const turnDisplay = document.getElementById("turnDisplay");
+    const resultDisplay = document.getElementById("resultDisplay");
+    let board = [];
+    let currentPlayer = "black";
+    let mode = "pvp";
+    let player1 = "Player 1", player2 = "Player 2";
+    let gameEnded = false;
+
+    function startGame() {
+      board = Array(8).fill().map(() => Array(8).fill(null));
+      board[3][3] = board[4][4] = "white";
+      board[3][4] = board[4][3] = "black";
+      currentPlayer = "black";
+      player1 = document.getElementById("player1").value || "Player 1";
+      player2 = document.getElementById("player2").value || "Player 2";
+      mode = document.getElementById("mode").value;
+      gameEnded = false;
+      resultDisplay.innerText = "";
+      updateTurnDisplay();
+      renderBoard();
+    }
+
+    const directions = [
+      [-1, 0], [1, 0], [0, -1], [0, 1],
+      [-1, -1], [-1, 1], [1, -1], [1, 1]
+    ];
+
+    function isValidMove(row, col, color) {
+      if (board[row][col] !== null) return false;
+      const opponent = (color === "black") ? "white" : "black";
+      for (const [dx, dy] of directions) {
+        let x = row + dx, y = col + dy;
+        let hasOpponentBetween = false;
+        while (x >= 0 && y >= 0 && x < 8 && y < 8 && board[x][y] === opponent) {
+          x += dx;
+          y += dy;
+          hasOpponentBetween = true;
+        }
+        if (hasOpponentBetween && x >= 0 && y >= 0 && x < 8 && y < 8 && board[x][y] === color) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function flipDiscs(row, col, color) {
+      const opponent = (color === "black") ? "white" : "black";
+      for (const [dx, dy] of directions) {
+        let x = row + dx, y = col + dy;
+        let toFlip = [];
+        while (x >= 0 && y >= 0 && x < 8 && y < 8 && board[x][y] === opponent) {
+          toFlip.push([x, y]);
+          x += dx;
+          y += dy;
+        }
+        if (toFlip.length && x >= 0 && y >= 0 && x < 8 && y < 8 && board[x][y] === color) {
+          toFlip.forEach(([fx, fy]) => board[fx][fy] = color);
+        }
+      }
+    }
+
+    function hasValidMove(color) {
+      for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 8; j++) {
+          if (isValidMove(i, j, color)) return true;
+        }
+      }
+      return false;
+    }
+
+    function countDiscs(color) {
+      return board.flat().filter(c => c === color).length;
+    }
+
+    function updateTurnDisplay() {
+      if (!gameEnded) {
+        turnDisplay.innerText = "ตาของ: " + (currentPlayer === "black" ? player1 : player2);
+      }
+    }
+
+    function renderBoard() {
+      boardElem.innerHTML = "";
+      let hasEmpty = false;
+      for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 8; j++) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          if (board[i][j]) {
+            const disc = document.createElement("div");
+            disc.className = board[i][j];
+            cell.appendChild(disc);
+          } else {
+            hasEmpty = true;
+            if (isValidMove(i, j, currentPlayer)) {
+              const hint = document.createElement("div");
+              hint.className = "hint";
+              cell.appendChild(hint);
+            }
+          }
+          cell.addEventListener("click", () => handleMove(i, j));
+          boardElem.appendChild(cell);
+        }
+      }
+      if (!hasEmpty && !gameEnded) {
+        endGame();
+      }
+    }
+
+    function handleMove(row, col) {
+      if (!isValidMove(row, col, currentPlayer) || gameEnded) return;
+      board[row][col] = currentPlayer;
+      flipDiscs(row, col, currentPlayer);
+      currentPlayer = (currentPlayer === "black") ? "white" : "black";
+
+      if (!hasValidMove("black") && !hasValidMove("white")) {
+        endGame();
+        return;
+      }
+
+      if (!hasValidMove(currentPlayer)) {
+        alert("ไม่มีตาเดิน ฝ่าย " + (currentPlayer === "black" ? player1 : player2) + " ต้องผ่าน!");
+        currentPlayer = (currentPlayer === "black") ? "white" : "black";
+      }
+
+      updateTurnDisplay();
+      renderBoard();
+
+      if (mode === "ai" && currentPlayer === "white") aiMove();
+    }
+
+    function endGame() {
+      const blackCount = countDiscs("black");
+      const whiteCount = countDiscs("white");
+      let winner = "เสมอ";
+      if (blackCount > whiteCount) winner = player1;
+      else if (whiteCount > blackCount) winner = player2;
+      const resultText = `จบเกมแล้ว! ผู้ชนะคือ: ${winner} (ดำ: ${blackCount}, ขาว: ${whiteCount})`;
+      resultDisplay.innerText = resultText;
+      alert(resultText);
+      document.getElementById("p1_val").value = player1;
+      document.getElementById("p2_val").value = player2;
+      document.getElementById("winner_val").value = winner;
+      gameEnded = true;
+    }
+
+    function aiMove() {
+      setTimeout(() => {
+        for (let i = 0; i < 8; i++) {
+          for (let j = 0; j < 8; j++) {
+            if (isValidMove(i, j, "white")) {
+              board[i][j] = "white";
+              flipDiscs(i, j, "white");
+              currentPlayer = "black";
+              updateTurnDisplay();
+              renderBoard();
+              return;
+            }
+          }
+        }
+        endGame();
+      }, 500);
+    }
+  </script>
+
+  <form method="POST" action="save_stats.php">
+    <input type="hidden" name="player1" id="p1_val">
+    <input type="hidden" name="player2" id="p2_val">
+    <input type="hidden" name="winner" id="winner_val">
+    <button type="submit">บันทึกผลลง CSV</button>
+  </form>
+
+  <div id="historyDisplay" style="margin-top: 30px;"><h3>ผลการแข่งขันย้อนหลัง</h3><div id="historyContent"></div></div>
+
+  <script>
+    window.addEventListener("load", () => {
+      fetch("othello.csv")
+        .then(response => response.text())
+        .then(text => {
+          const lines = text.trim().split("\n");
+          const history = lines.map(line => {
+            const [date, p1, p2, winner] = line.split(",");
+            return `<div>🕒 ${date} — <strong>${p1}</strong> vs <strong>${p2}</strong> 👉 ผู้ชนะ: <strong>${winner}</strong></div>`;
+          }).reverse().slice(0, 10).join("");
+          document.getElementById("historyContent").innerHTML = history;
+        })
+        .catch(() => {
+          document.getElementById("historyContent").innerText = "ยังไม่มีข้อมูลการแข่งขันย้อนหลังค่ะ";
+        });
+    });
+  </script>
+
+</body>
+</html>
