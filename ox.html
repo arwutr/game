@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OX Game by ARM</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(120deg, #e0f7fa, #80deea);
+      padding: 20px;
+      color: #004d40;
+    }
+    canvas {
+      border: 4px solid #004d40;
+      margin-top: 20px;
+      background-color: #ffffff;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .controls {
+      margin-top: 20px;
+    }
+    input, button, select {
+      margin: 5px;
+      padding: 8px;
+      border: 1px solid #004d40;
+      border-radius: 5px;
+      background-color: #ffffff;
+      color: #004d40;
+    }
+    .scoreboard {
+      margin-top: 10px;
+      background: #b2dfdb;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    #winnerDisplay {
+      margin-top: 10px;
+      font-size: 20px;
+      font-weight: bold;
+      color: #00695c;
+    }
+  </style>
+</head>
+<body>
+  <h1>OX Game by ARM</h1>
+  <div class="controls">
+    <input type="text" id="player1" placeholder="Player 1 Name" />
+    <input type="text" id="player2" placeholder="Player 2 / AI" />
+    <select id="mode">
+      <option value="pvp">Player vs Player</option>
+      <option value="ai">Player vs AI</option>
+    </select>
+    <button onclick="startGame()">Start Game</button>
+    <button onclick="downloadCSV()">Download Stats (.csv)</button>
+  </div>
+  <div class="scoreboard" id="scoreboard">
+    Score: <span id="scoreP1">0</span> - <span id="scoreP2">0</span>
+  </div>
+  <div id="winnerDisplay"></div>
+  <canvas id="gameCanvas" width="300" height="300"></canvas>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const winnerDisplay = document.getElementById("winnerDisplay");
+    let board, currentPlayer, gameOver, stats = [];
+    let player1Name = "Player 1", player2Name = "Player 2", mode = "pvp";
+    let scoreP1 = 0, scoreP2 = 0;
+
+    function drawBoard() {
+      ctx.clearRect(0, 0, 300, 300);
+      ctx.lineWidth = 3;
+      for (let i = 1; i <= 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * 100, 0);
+        ctx.lineTo(i * 100, 300);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, i * 100);
+        ctx.lineTo(300, i * 100);
+        ctx.stroke();
+      }
+    }
+
+    function drawXO() {
+      board.forEach((val, i) => {
+        const x = (i % 3) * 100 + 50;
+        const y = Math.floor(i / 3) * 100 + 50;
+        ctx.font = "48px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = val === "X" ? "#d32f2f" : "#1976d2";
+        ctx.fillText(val, x, y);
+      });
+    }
+
+    function handleClick(e) {
+      if (gameOver) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const col = Math.floor(x / 100);
+      const row = Math.floor(y / 100);
+      const index = row * 3 + col;
+      if (board[index] !== "") return;
+      board[index] = currentPlayer;
+      checkWin();
+      currentPlayer = currentPlayer === "X" ? "O" : "X";
+      drawXO();
+      if (!gameOver && mode === "ai" && currentPlayer === "O") makeAIMove();
+    }
+
+    function checkWin() {
+      const wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+      for (let combo of wins) {
+        const [a, b, c] = combo;
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+          gameOver = true;
+          const winner = board[a];
+          if ((winner === "X" && currentPlayer === "X") || (winner === "O" && currentPlayer === "O")) {
+            if (currentPlayer === "X") scoreP1++;
+            else scoreP2++;
+          }
+          updateScoreboard();
+          stats.push({
+            player1: player1Name,
+            player2: player2Name,
+            winner,
+            date: new Date().toISOString()
+          });
+          winnerDisplay.textContent = `ผู้ชนะ: ${winner === "X" ? player1Name : player2Name}`;
+          alert(`${winner} wins!`);
+          return;
+        }
+      }
+      if (!board.includes("")) {
+        gameOver = true;
+        stats.push({
+          player1: player1Name,
+          player2: player2Name,
+          winner: "Draw",
+          date: new Date().toISOString()
+        });
+        winnerDisplay.textContent = "ผลการแข่งขัน: เสมอกันค่ะ";
+        alert("It's a draw!");
+      }
+    }
+
+    function makeAIMove() {
+      const empty = board.map((v, i) => v === "" ? i : null).filter(i => i !== null);
+
+      ctx.save();
+      ctx.fillStyle = '#004d40';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('AI is thinking...', 10, 290);
+      ctx.restore();
+
+      setTimeout(() => {
+        for (let i of empty) {
+          const tempBoard = [...board];
+          tempBoard[i] = "O";
+          if (isWinning(tempBoard, "O")) {
+            board[i] = "O";
+            checkWin();
+            currentPlayer = "X";
+            drawXO();
+            return;
+          }
+        }
+        for (let i of empty) {
+          const tempBoard = [...board];
+          tempBoard[i] = "X";
+          if (isWinning(tempBoard, "X")) {
+            board[i] = "O";
+            checkWin();
+            currentPlayer = "X";
+            drawXO();
+            return;
+          }
+        }
+        if (board[4] === "") {
+          board[4] = "O";
+          checkWin();
+          currentPlayer = "X";
+          drawXO();
+          return;
+        }
+        const move = empty[Math.floor(Math.random() * empty.length)];
+        board[move] = "O";
+        checkWin();
+        currentPlayer = "X";
+        drawXO();
+      }, 500);
+    }
+
+    function isWinning(tempBoard, player) {
+      const wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+      return wins.some(([a,b,c]) => tempBoard[a] === player && tempBoard[b] === player && tempBoard[c] === player);
+    }
+
+    function startGame() {
+      player1Name = document.getElementById("player1").value || "Player 1";
+      player2Name = document.getElementById("player2").value || "Player 2";
+      mode = document.getElementById("mode").value;
+      board = Array(9).fill("");
+      currentPlayer = "X";
+      gameOver = false;
+      winnerDisplay.textContent = "";
+      drawBoard();
+      drawXO();
+    }
+
+    function updateScoreboard() {
+      document.getElementById("scoreP1").textContent = scoreP1;
+      document.getElementById("scoreP2").textContent = scoreP2;
+    }
+
+    function downloadCSV() {
+      let csv = "Player 1,Player 2,Winner,Date\n";
+      stats.forEach(row => {
+        csv += `${row.player1},${row.player2},${row.winner},${row.date}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ox_game_stats.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    canvas.addEventListener("click", handleClick);
+  </script>
+</body>
+</html>
