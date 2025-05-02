@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>เขาวงกต By ARM</title>
+  <style>
+    canvas {
+      border: 2px solid black;
+      display: block;
+      margin: 20px auto;
+    }
+    #controls {
+      text-align: center;
+      margin-top: 10px;
+    }
+    input, button {
+      margin: 5px;
+      padding: 5px;
+    }
+    #scoreTable {
+      width: 80%;
+      margin: 20px auto;
+      border-collapse: collapse;
+    }
+    #scoreTable th, #scoreTable td {
+      border: 1px solid #aaa;
+      padding: 8px;
+      text-align: center;
+    }
+    #scoreTable th {
+      background-color: #eee;
+    }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center;">เขาวงกต By ARM</h2>
+  <div id="controls">
+    <input type="text" id="playerName" placeholder="Enter your name" />
+    <button onclick="startGame()">Start Game</button>
+    <a id="downloadLink" href="#" download="othello.csv" style="display:none">Download Stats</a>
+    <p id="scoreDisplay">Score: 0 | Level: 1 | Lives: 3</p>
+  </div>
+  <div style="text-align:center; margin-top: 10px;">
+    <button onclick="restartGame()" id="restartButton" style="display:none">Restart Game</button>
+  </div>
+  <canvas id="mazeCanvas" width="400" height="400"></canvas>
+  <h3 style="text-align:center;">Score History</h3>
+  <table id="scoreTable">
+    <thead>
+      <tr><th>Player</th><th>Score</th><th>Level</th><th>Time</th></tr>
+    </thead>
+    <tbody id="scoreBody"></tbody>
+  </table>
+<script>
+const canvas = document.getElementById("mazeCanvas");
+const ctx = canvas.getContext("2d");
+const cellSize = 50;
+let maze = [];
+let player = { x: 1, y: 1 };
+let monster = { x: 3, y: 3 };
+let monsterInterval;
+let lives = 3;
+let stats = [];
+let score = 0;
+let level = 1;
+let bombs = [];
+
+function generateMaze(width, height) {
+  const maze = Array.from({ length: height }, () => Array(width).fill(1));
+  function carve(x, y) {
+    maze[y][x] = 0;
+    const dirs = [[0,-2],[2,0],[0,2],[-2,0]].sort(() => Math.random() - 0.5);
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (ny > 0 && ny < height && nx > 0 && nx < width && maze[ny][nx] === 1) {
+        maze[y + dy/2][x + dx/2] = 0;
+        carve(nx, ny);
+      }
+    }
+  }
+  carve(1, 1);
+  maze[height - 2][width - 2] = 0;
+  return maze;
+}
+
+function drawMaze() {
+  const exitX = maze[0].length - 2;
+  const exitY = maze.length - 2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < maze.length; y++) {
+    for (let x = 0; x < maze[y].length; x++) {
+      ctx.fillStyle = (x === exitX && y === exitY) ? 'green' : (maze[y][x] === 1 ? 'black' : 'white');
+      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+    }
+  }
+  const px = player.x * cellSize + cellSize / 2;
+  const py = player.y * cellSize + cellSize / 2;
+  const blink = Math.floor(Date.now() / 300) % 6 < 5; // กระพริบตาทุกๆ 0.3 วิ
+
+  // ตัวละครพื้นฐาน
+  ctx.fillStyle = '#87CEFA';
+  ctx.beginPath();
+  ctx.arc(px, py, cellSize / 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ดวงตา
+  ctx.fillStyle = '#fff';
+  if (blink) {
+    ctx.beginPath();
+    ctx.arc(px - 5, py - 5, 3, 0, Math.PI * 2);
+    ctx.arc(px + 5, py - 5, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ปาก
+  ctx.strokeStyle = '#000';
+  ctx.beginPath();
+  ctx.moveTo(px - 6, py + 5);
+  ctx.lineTo(px + 6, py + 5);
+  ctx.stroke();
+
+  // หมวก
+  ctx.fillStyle = '#ff69b4';
+  ctx.beginPath();
+  ctx.arc(px, py - 15, 10, 0, Math.PI, true);
+  ctx.fill();
+  ctx.fillRect(px - 10, py - 15, 20, 5);
+  const centerX = monster.x * cellSize + cellSize / 2;
+  const centerY = monster.y * cellSize + cellSize / 2;
+  ctx.fillStyle = 'darkred';
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, cellSize / 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'white';
+  ctx.beginPath();
+  ctx.arc(centerX - 6, centerY - 6, 3, 0, Math.PI * 2);
+  ctx.arc(centerX + 6, centerY - 6, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'black';
+  ctx.beginPath();
+  ctx.moveTo(centerX - 8, centerY + 6);
+  ctx.lineTo(centerX + 8, centerY + 6);
+  ctx.stroke();
+  bombs.forEach(b => {
+    ctx.fillStyle = 'orange';
+    ctx.beginPath();
+    ctx.arc(b.x * cellSize + cellSize / 2, b.y * cellSize + cellSize / 2, 6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function moveMonster() {
+  const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  let validMoves = directions.filter(([dx, dy]) => {
+    let x = monster.x + dx;
+    let y = monster.y + dy;
+    return maze[y] && maze[y][x] === 0;
+  });
+  if (validMoves.length > 0) {
+    let [dx, dy] = validMoves[Math.floor(Math.random() * validMoves.length)];
+    monster.x += dx;
+    monster.y += dy;
+  }
+  checkCollision();
+}
+
+function movePlayer(dx, dy) {
+  const newX = player.x + dx;
+  const newY = player.y + dy;
+  const exitTargetX = maze[0].length - 2;
+  const exitTargetY = maze.length - 2;
+  if (maze[newY] && maze[newY][newX] === 0) {
+    player.x = newX;
+    player.y = newY;
+    drawMaze();
+    checkCollision();
+    if (player.x === exitTargetX && player.y === exitTargetY) {
+      score += 10;
+      level++;
+      updateDisplay();
+      startGame();
+    }
+  }
+}
+
+document.addEventListener("keydown", function(e) {
+  if (e.key === 'Enter') {
+    const nameInput = document.getElementById("playerName").value;
+    if (nameInput.toLowerCase() === 'nimda') {
+      score *= 10;
+      alert("Cheat activated! Score multiplied by 10.");
+      updateDisplay();
+      return;
+    }
+  }
+  if (e.key === ' ') {
+    placeBomb();
+    return;
+  }
+  switch(e.key) {
+    case "ArrowUp": movePlayer(0, -1); break;
+    case "ArrowDown": movePlayer(0, 1); break;
+    case "ArrowLeft": movePlayer(-1, 0); break;
+    case "ArrowRight": movePlayer(1, 0); break;
+  }
+});
+
+function startGame() {
+  alert(`เริ่มด่านที่ ${level}!`);
+  if (monsterInterval) clearInterval(monsterInterval);
+  const size = 9 + level * 2;
+  maze = generateMaze(size, size);
+  canvas.width = size * cellSize;
+  canvas.height = size * cellSize;
+  player = { x: 1, y: 1 };
+  monster = { x: 3, y: 3 };
+  updateDisplay();
+  drawMaze();
+  monsterInterval = setInterval(() => {
+    moveMonster();
+    drawMaze();
+  }, 800);
+}
+
+function checkCollision() {
+  bombs = bombs.filter(b => {
+    if (b.x === monster.x && b.y === monster.y) {
+      score += 20;
+      monster = { x: -1, y: -1 };
+      updateDisplay();
+      return false;
+    }
+    return true;
+  });
+  if (player.x === monster.x && player.y === monster.y) {
+    lives--;
+    if (lives <= 0) {
+    lives = 0;
+    updateDisplay();
+    clearInterval(monsterInterval);
+      alert("Game Over! Final Score: " + score);
+      saveStats();
+      renderStats();
+      document.getElementById("downloadLink").click();
+      document.getElementById("restartButton").style.display = "inline-block";
+    } else {
+      alert("You were caught! Lives left: " + lives);
+      player = { x: 1, y: 1 };
+      updateDisplay();
+    }
+  }
+}
+
+function placeBomb() {
+  if (!bombs.some(b => b.x === player.x && b.y === player.y)) {
+    bombs.push({ x: player.x, y: player.y });
+    drawMaze();
+  }
+}
+
+function updateDisplay() {
+  document.getElementById("scoreDisplay").innerText = `Score: ${score} | Level: ${level} | Lives: ${lives}`;
+}
+
+function saveStats() {
+  const name = document.getElementById("playerName").value || "Unknown";
+  const time = new Date().toLocaleString();
+  stats.push([name, score, level, time]);
+  renderStats();
+  let csv = "Player,Score,Level,Time\n" + stats.map(row => row.join(",")).join("\n");
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.getElementById("downloadLink");
+  a.href = url;
+  a.style.display = "inline-block";
+}
+
+function renderStats() {
+  const tbody = document.getElementById("scoreBody");
+  tbody.innerHTML = "";
+  stats.forEach(([name, score, level, time]) => {
+    const row = `<tr><td>${name}</td><td>${score}</td><td>${level}</td><td>${time}</td></tr>`;
+    tbody.innerHTML += row;
+  });
+}
+
+function restartGame() {
+  score = 0;
+  level = 1;
+  lives = 3;
+  bombs = [];
+  document.getElementById("restartButton").style.display = "none";
+  updateDisplay();
+  startGame();
+}
+</script>
+</body>
+</html>
