@@ -5,7 +5,7 @@
   <title>Othello By ARM</title>
   <style>
     body { font-family: sans-serif; text-align: center; background: #f4f4f4; }
-    #board { display: grid; grid-template-columns: repeat(8, 50px); gap: 2px; margin: 20px auto; }
+    #board { display: grid; grid-template-columns: repeat(8, 50px); gap: 2px; margin: 20px auto; justify-content: center; }
     .cell { width: 50px; height: 50px; background: green; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
     .black { background: black; border-radius: 50%; width: 40px; height: 40px; }
     .white { background: white; border-radius: 50%; width: 40px; height: 40px; }
@@ -31,6 +31,10 @@
   <div id="resultDisplay"></div>
   <div id="board"></div>
 
+  <button onclick="downloadCSV()">ดาวน์โหลดผลการแข่งขัน</button>
+
+  <div id="historyDisplay" style="margin-top: 30px;"><h3>ผลการแข่งขันย้อนหลัง</h3><div id="historyContent"></div></div>
+
   <script>
     const boardElem = document.getElementById("board");
     const turnDisplay = document.getElementById("turnDisplay");
@@ -40,6 +44,12 @@
     let mode = "pvp";
     let player1 = "Player 1", player2 = "Player 2";
     let gameEnded = false;
+    let history = [];
+
+    if (localStorage.getItem("othelloHistory")) {
+      history = JSON.parse(localStorage.getItem("othelloHistory"));
+      updateHistoryDisplay();
+    }
 
     function startGame() {
       board = Array(8).fill().map(() => Array(8).fill(null));
@@ -172,9 +182,11 @@
       const resultText = `จบเกมแล้ว! ผู้ชนะคือ: ${winner} (ดำ: ${blackCount}, ขาว: ${whiteCount})`;
       resultDisplay.innerText = resultText;
       alert(resultText);
-      document.getElementById("p1_val").value = player1;
-      document.getElementById("p2_val").value = player2;
-      document.getElementById("winner_val").value = winner;
+
+      const date = new Date().toLocaleString();
+      history.push([date, player1, player2, winner]);
+      localStorage.setItem("othelloHistory", JSON.stringify(history));
+      updateHistoryDisplay();
       gameEnded = true;
     }
 
@@ -195,29 +207,25 @@
         endGame();
       }, 500);
     }
+
+    function updateHistoryDisplay() {
+      const container = document.getElementById("historyContent");
+      container.innerHTML = history.map(([date, p1, p2, winner]) =>
+        `<div>🕒 ${date} — <strong>${p1}</strong> vs <strong>${p2}</strong> 👉 ผู้ชนะ: <strong>${winner}</strong></div>`
+      ).slice(-10).reverse().join("");
+    }
+
+    function downloadCSV() {
+      const csvContent = "data:text/csv;charset=utf-8," +
+        history.map(e => e.join(",")).join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "othello.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   </script>
-
-  <form method="POST" action="save_stats.php">
-    <input type="hidden" name="player1" id="p1_val">
-    <input type="hidden" name="player2" id="p2_val">
-    <input type="hidden" name="winner" id="winner_val">
-    <button type="submit">บันทึกผลลง CSV</button>
-  </form>
-
-  <div id="historyDisplay" style="margin-top: 30px;"><h3>ผลการแข่งขันย้อนหลัง</h3><div id="historyContent"></div></div>
-
-<script>
-  window.addEventListener("load", () => {
-    fetch("get_stats.php")
-      .then(response => response.text())
-      .then(html => {
-        document.getElementById("historyContent").innerHTML = html;
-      })
-      .catch(() => {
-        document.getElementById("historyContent").innerText = "ยังไม่มีข้อมูลการแข่งขันย้อนหลังค่ะ";
-      });
-  });
-</script>
-
 </body>
 </html>
