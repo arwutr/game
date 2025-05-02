@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Space Shooter By ARM</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: black;
+      color: white;
+      text-align: center;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #000022;
+      border: 2px solid #fff;
+    }
+    #ui {
+      margin-top: 10px;
+    }
+    input, button {
+      padding: 5px 10px;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body tabindex="0">
+  <h1>🌌 Space Shooter By ARM</h1>
+  <canvas id="gameCanvas" width="480" height="640"></canvas>
+  <div id="ui">
+    <input id="playerName" placeholder="Enter your name" />
+    <button onclick="startGame()">Start Game</button>
+    <button onclick="downloadCSV()">Download Scores CSV</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    let cheatBuffer = "";
+    let isInvincible = false;
+    let playerName = "";
+    let playerX = canvas.width / 2;
+    let bullets = [];
+    let enemies = [];
+    let score = 0;
+    let level = 1;
+    let lives = 3;
+    let gameInterval;
+    let scores = [];
+    let spaceshipReady = false;
+    let enemyImgReady = false;
+
+    const spaceshipImg = new Image();
+    spaceshipImg.src = "https://i.postimg.cc/q7SppFDr/1746180245807-0-removebg-preview.png";
+    spaceshipImg.onload = () => spaceshipReady = true;
+
+    const enemyImg = new Image();
+    enemyImg.src = "https://i.postimg.cc/zX88DK7y/Pngtree-ufo-cartoon-ufo-alien-spaceship-7907398.png";
+    enemyImg.onload = () => enemyImgReady = true;
+
+    document.body.focus();
+
+    document.body.addEventListener("keydown", (e) => {
+      if (e.key && typeof e.key === 'string') {
+        cheatBuffer += e.key.toLowerCase();
+        if (cheatBuffer.length > 5) cheatBuffer = cheatBuffer.slice(-5);
+        if (cheatBuffer === "nimda") {
+          isInvincible = !isInvincible;
+          cheatBuffer = "";
+          console.log("Invincibility:", isInvincible);
+        }
+      }
+
+      if (e.key === "ArrowLeft") playerX -= 10;
+      if (e.key === "ArrowRight") playerX += 10;
+      if (e.key === " ") {
+        bullets.push({
+          x: playerX + 20,
+          y: canvas.height - 55,
+          radius: 3,
+          speed: 6,
+          active: true
+        });
+      }
+    });
+
+    function startGame() {
+      playerName = document.getElementById("playerName").value || "Unknown";
+      bullets = [];
+      enemies = [];
+      score = 0;
+      level = 1;
+      lives = 3;
+      spawnEnemies();
+      if (gameInterval) clearInterval(gameInterval);
+      gameInterval = setInterval(gameLoop, 1000 / 60);
+      document.body.focus();
+    }
+
+    function spawnEnemies() {
+      const numEnemies = Math.max(3, Math.floor(level + 2));
+      for (let i = 0; i < numEnemies; i++) {
+        enemies.push({
+          x: Math.random() * (canvas.width - 40),
+          y: Math.random() * -200,
+          width: 40,
+          height: 60,
+          active: true
+        });
+      }
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "white";
+      ctx.fillText("Score: " + score + " | Level: " + level, 10, 20);
+
+      if (lives > 0) {
+        ctx.font = "16px sans-serif";
+        ctx.fillStyle = "red";
+        ctx.fillText("❤️".repeat(lives), 360, 20);
+      } else {
+        ctx.clearRect(360, 5, 100, 20);
+      }
+
+      if (spaceshipReady) {
+        ctx.drawImage(spaceshipImg, playerX, canvas.height - 50, 50, 50);
+      } else {
+        ctx.fillStyle = "white";
+        ctx.fillRect(playerX, canvas.height - 50, 40, 40);
+      }
+
+      bullets.forEach((b) => {
+        b.y -= b.speed;
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        if (b.y < 0) b.active = false;
+      });
+
+      enemies.forEach((e) => {
+        e.y += 0.3 + level * 0.2;
+        if (enemyImgReady) {
+          ctx.drawImage(enemyImg, e.x, e.y, e.width, e.height);
+        } else {
+          ctx.fillStyle = "red";
+          ctx.fillRect(e.x, e.y, e.width, e.height);
+        }
+        if (e.y > canvas.height) {
+          e.active = false;
+          if (!isInvincible) {
+            lives--;
+            if (lives <= 0) endGame();
+          }
+        }
+      });
+
+      bullets.forEach((b) => {
+        enemies.forEach((e) => {
+          if (
+            b.active &&
+            e.active &&
+            b.x > e.x &&
+            b.x < e.x + e.width &&
+            b.y > e.y &&
+            b.y < e.y + e.height
+          ) {
+            b.active = false;
+            e.active = false;
+            score += 100;
+          }
+        });
+      });
+
+      bullets = bullets.filter(b => b.active);
+      enemies = enemies.filter(e => e.active);
+
+      if (enemies.length === 0) {
+        level++;
+        spawnEnemies();
+      }
+    }
+
+    function endGame() {
+      clearInterval(gameInterval);
+      scores.push({ name: playerName, score, level, date: new Date().toLocaleString() });
+      ctx.fillStyle = "white";
+      ctx.font = "36px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Game Over", canvas.width / 2, canvas.height / 2 - 20);
+      ctx.font = "24px sans-serif";
+      ctx.fillText("Score: " + score, canvas.width / 2, canvas.height / 2 + 20);
+    }
+
+    function downloadCSV() {
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Name,Score,Level,Date\n";
+      scores.forEach(row => {
+        csvContent += `${row.name},${row.score},${row.level},${row.date}\n`;
+      });
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "space_shooter_scores.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
