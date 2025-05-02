@@ -85,6 +85,27 @@ function generateMaze(width, height) {
   return maze;
 }
 
+function startGame() {
+  const nameInput = document.getElementById("playerName").value;
+  if (nameInput.toLowerCase() === 'nimda') {
+    score *= 10;
+    updateDisplay();
+  }
+  if (monsterInterval) clearInterval(monsterInterval);
+  const size = 9 + level * 2;
+  maze = generateMaze(size, size);
+  canvas.width = size * cellSize;
+  canvas.height = size * cellSize;
+  player = { x: 1, y: 1 };
+  monster = { x: 3, y: 3 };
+  updateDisplay();
+  drawMaze();
+  monsterInterval = setInterval(() => {
+    moveMonster();
+    drawMaze();
+  }, 800);
+}
+
 function drawMaze() {
   const exitX = maze[0].length - 2;
   const exitY = maze.length - 2;
@@ -97,15 +118,11 @@ function drawMaze() {
   }
   const px = player.x * cellSize + cellSize / 2;
   const py = player.y * cellSize + cellSize / 2;
-  const blink = Math.floor(Date.now() / 300) % 6 < 5; // กระพริบตาทุกๆ 0.3 วิ
-
-  // ตัวละครพื้นฐาน
+  const blink = Math.floor(Date.now() / 300) % 6 < 5;
   ctx.fillStyle = '#87CEFA';
   ctx.beginPath();
   ctx.arc(px, py, cellSize / 2.5, 0, Math.PI * 2);
   ctx.fill();
-
-  // ดวงตา
   ctx.fillStyle = '#fff';
   if (blink) {
     ctx.beginPath();
@@ -113,20 +130,17 @@ function drawMaze() {
     ctx.arc(px + 5, py - 5, 3, 0, Math.PI * 2);
     ctx.fill();
   }
-
-  // ปาก
   ctx.strokeStyle = '#000';
   ctx.beginPath();
   ctx.moveTo(px - 6, py + 5);
   ctx.lineTo(px + 6, py + 5);
   ctx.stroke();
-
-  // หมวก
   ctx.fillStyle = '#ff69b4';
   ctx.beginPath();
   ctx.arc(px, py - 15, 10, 0, Math.PI, true);
   ctx.fill();
   ctx.fillRect(px - 10, py - 15, 20, 5);
+
   const centerX = monster.x * cellSize + cellSize / 2;
   const centerY = monster.y * cellSize + cellSize / 2;
   ctx.fillStyle = 'darkred';
@@ -143,6 +157,7 @@ function drawMaze() {
   ctx.moveTo(centerX - 8, centerY + 6);
   ctx.lineTo(centerX + 8, centerY + 6);
   ctx.stroke();
+
   bombs.forEach(b => {
     ctx.fillStyle = 'orange';
     ctx.beginPath();
@@ -150,6 +165,21 @@ function drawMaze() {
     ctx.fill();
   });
 }
+
+document.addEventListener("keydown", function(e) {
+  if (document.activeElement === document.getElementById("playerName")) return;
+  if (e.key === ' ') {
+    e.preventDefault();
+    placeBomb();
+    return;
+  }
+  switch(e.key) {
+    case "ArrowUp": movePlayer(0, -1); break;
+    case "ArrowDown": movePlayer(0, 1); break;
+    case "ArrowLeft": movePlayer(-1, 0); break;
+    case "ArrowRight": movePlayer(1, 0); break;
+  }
+});
 
 function moveMonster() {
   const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -185,45 +215,6 @@ function movePlayer(dx, dy) {
   }
 }
 
-document.addEventListener("keydown", function(e) {
-  if (e.key === 'Enter') {
-    const nameInput = document.getElementById("playerName").value;
-    if (nameInput.toLowerCase() === 'nimda') {
-      score *= 10;
-      alert("Cheat activated! Score multiplied by 10.");
-      updateDisplay();
-      return;
-    }
-  }
-  if (e.key === ' ') {
-    placeBomb();
-    return;
-  }
-  switch(e.key) {
-    case "ArrowUp": movePlayer(0, -1); break;
-    case "ArrowDown": movePlayer(0, 1); break;
-    case "ArrowLeft": movePlayer(-1, 0); break;
-    case "ArrowRight": movePlayer(1, 0); break;
-  }
-});
-
-function startGame() {
-  alert(`เริ่มด่านที่ ${level}!`);
-  if (monsterInterval) clearInterval(monsterInterval);
-  const size = 9 + level * 2;
-  maze = generateMaze(size, size);
-  canvas.width = size * cellSize;
-  canvas.height = size * cellSize;
-  player = { x: 1, y: 1 };
-  monster = { x: 3, y: 3 };
-  updateDisplay();
-  drawMaze();
-  monsterInterval = setInterval(() => {
-    moveMonster();
-    drawMaze();
-  }, 800);
-}
-
 function checkCollision() {
   bombs = bombs.filter(b => {
     if (b.x === monster.x && b.y === monster.y) {
@@ -237,16 +228,15 @@ function checkCollision() {
   if (player.x === monster.x && player.y === monster.y) {
     lives--;
     if (lives <= 0) {
-    lives = 0;
-    updateDisplay();
-    clearInterval(monsterInterval);
+      lives = 0;
+      updateDisplay();
+      clearInterval(monsterInterval);
       alert("Game Over! Final Score: " + score);
       saveStats();
       renderStats();
       document.getElementById("downloadLink").click();
       document.getElementById("restartButton").style.display = "inline-block";
     } else {
-      alert("You were caught! Lives left: " + lives);
       player = { x: 1, y: 1 };
       updateDisplay();
     }
